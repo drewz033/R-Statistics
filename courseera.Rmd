@@ -1,0 +1,187 @@
+---
+title: "Exploring the BRFSS data"
+output: html_document:
+  fig_height:4
+  highlight:pygments
+  theme:spacelab
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Load Packages
+```{r load-packages,message=FALSE}
+library(ggplot2)
+library(dplyr)
+```
+
+## Load Data
+
+
+```{r load-data}
+load("brfss2013.RData")
+```
+
+### Part 1: Data
+
+In this case, the target population for the CDC are all Americans (or residents of American territories), that are age 18 or over. Because obtaining data for the target population would be tedious, the CDC randomly samples adults in a household using a landline and cellular telephone data collection method. 
+
+During landline sampling, the BRFSS divides telephone numbers into two strata, a high density and medium density strata. Determining whether a number enters the high or medium density strata depends on the number of listed telephone numbers in a household's hundred block. From there, the BRFSS then randomly samples from the strata.
+
+During cellphone sampling, the BRFSS collects numbers sorted by area code and by exchange (for example 212-222-0000 to 212-222-9999). The BRFSS creates intervals within each exchange of size n and then randomly samples from each interval. 
+
+Using these methods, the BRFSS is performing observastional studies. They are simply collecting data without interference. By using observational data, it is more difficult to form causal relationships between reponse variables and explanatory variables. Observational data is better at showing associations then determining a cause and effect from variables. 
+
+The type of data being collected is retrospective. The survey is acquiring data about individuals which has already occured. 
+
+
+
+### Part 2: Research Questions
+
+*** Do married inidviduals with more children in their household report exercising less than married individuals with less children on average? I am curious to see if there is an association between raising children and time alloted to exercise and therefore health.***
+
+
+*** Do people with higher income levels report a higher number of days of feeling good health? Is there an association between income levels and feeling healthy? Do people with higher income levels have an health advantage over those with lower income levels?***
+
+
+
+***What is the relationship between people who report smoking at least 100 cigarettes and binge drinking more than 10 times per month and having a heart attack? My hypothesis is we may see a strong association between smoking, binge drinking and heart health. How does the percent of heart attacks reported change when adjusting the number of binge drinking days?***
+
+
+### Part 3: Exploratory Data Analysis
+
+** Research Question 1: **
+```{r}
+
+## Creating data frame with correct data
+exercise<-brfss2013[c('marital','children','exerhmm1')]
+
+#We are looking for the population of people who are married, have children and actually exercise
+married_status<-exercise%>%
+  filter(marital=='Married',children>0,exerhmm1>=0)
+
+#We can view the summary statistics of exercise time grouped by # of children in household
+ex_time<-married_status%>%
+  group_by(children)%>%
+  summarise(mean(exerhmm1),median(exerhmm1))
+
+#In the below graph, we take the average exercise time as reported by married individuals and filter by number of children in household. My original thought was we would not see a normal distribution but a right skewed distribution. The thesis is that having more children reduces available time to exercise and therefore, those with more children will show lower average exercise time. Oddly enough, some of the cohorts that exercise more on average are those with more children in the household.
+ggplot(data=ex_time,aes(x=children,y=ex_time$`mean(exerhmm1)`))+
+  geom_histogram(stat='identity')+
+  labs(x='Number of Children',y='Exercise Time (Minutes) Past Month')
+
+#We can see that using the median instead of average still does not show more exercise time for those with less children.
+ggplot(data=ex_time,aes(x=children,y=ex_time$`median(exerhmm1)`))+
+  geom_histogram(stat='identity')+
+  labs(x='Number of Children',y='Exercise Time (Minutes) Past Month')
+
+#Summary Statistics
+
+married_status%>%
+  group_by(children)%>%
+  summarise(mean(exerhmm1),median(exerhmm1),sd(exerhmm1))
+
+
+#Overall we do not see an association between amount of children in the household and time dedicated to exercising among married people. Using both the average and median, the distribution of exercise time is relatively flat and multimodal.We therefore can not draw a comparison between number of children in the house and exercise time of married individuals.
+```
+
+
+
+***Research Question 2***
+```{r}
+#filter dataframe for relevant information
+
+income<-brfss2013[c('physhlth','income2')]
+
+#drop all NA's
+income<-na.omit(income)
+
+#visualise median number of days of good health based on income levels. Oddly enough, the less amount of money made the more there appears to be a greater number of days reported of good health
+income%>%
+  group_by(income2)%>%
+  summarise(median(physhlth))
+
+#mean shows the data here is right skewed (mean is > median for each cohort)
+income%>%
+  group_by(income2)%>%
+  summarise(mean(physhlth))
+
+
+#we can see the skew of the data by plotting box and whisker graphs. We can see the distributions are very much right skewed. But the relationship appears to be similar to the summarise functions above. Those who make more money report feeling good days of health less frequently than those who make less money. This is perhaps due to the age of those making more money (i.e. more years of expereicne commensurate with higher salaries). Perhaps we can say age is a confounding variable on income and feeling healthy. In this sense, there seems to be a relationship between income levels and how healthy one may feel over the course of a month
+
+b<-ggplot(data=income,aes(x=income2,y=physhlth))
+
+b+geom_boxplot()+ coord_flip()
+
+
+```
+
+
+*** Research Question 3***:
+```{r}
+
+#Filter data for columns needed to answer research question
+heart<-brfss2013[c('smoke100','drnk3ge5','cvdinfr4')]
+
+#drop NA's to do calculations
+
+heart<-na.omit(heart)
+
+#Want to see the median number of times people who smoke 100 cigarettes binge drink to determine shape of distribution
+heart%>%
+  group_by(smoke100)%>%
+  summarise(mean(drnk3ge5))
+
+heart%>%
+  group_by(smoke100)%>%
+  summarise(median(drnk3ge5))
+
+#We can also view the quantiles of binge drinking regardless of individuals' smoking behavior
+quantile(heart$drnk3ge5)
+
+#View the histogram of binge drinkers irrespective of smoking patterns
+ggplot(data=heart,aes(x=drnk3ge5))+
+  geom_bar()
+
+
+#We can subset the data strictly for heavy smokers
+heart2<-heart%>%
+  filter(smoke100=='Yes')
+
+#View the histogram of binge drinking for heavy smokers
+ggplot(data=heart2,aes(x=drnk3ge5))+
+  geom_bar()
+
+
+#Given some of the data and visualizations, the median binge drinking days for heavy smokers is about 1. The distribution is heavily right skewed meaning the mean of the data will be greater than the median. We want to see how heart attacks increase among the top 75% of binge drinkers. Since 75% of the data is below 1, we will filter for binge drinking days between 10 and 30.
+
+
+#In this case we want to filter for people who have smoked at least 100 times in the past 30 days and have binge drank between
+#10 and 30 times in the past month (this will capture a good amount of data in the top 25% of binge drinking days)
+binge<-heart%>%
+  filter(smoke100=='Yes',between(drnk3ge5,10,30))
+
+# We can visualize the number of heart attacks reported based on the number of days of bing drinking over the past 30 days. We can see
+# at 18 binge drinking days, 20% of people reported having a heart attack. The only cohorts not reporting a heart attack are 13,19,22 and 26 drinking days.
+
+ggplot(data=binge,aes(x=binge$drnk3ge5,fill=binge$cvdinfr4))+
+ geom_bar(position='fill')+
+  labs(x='# Days Binge Drinking Over 1 Month',y='Reported Heart Attacks Yes or No')
+
+#we want to graph the same data but for people who binge drink closer to the median amount of days
+
+no_binge<-heart%>%
+  filter(smoke100=='Yes',between(drnk3ge5,0,9))
+
+
+#Although each drinking cohort reports a heart attack, 90% of people or greater in each cohort report not having a heart attack. We see there is likely an association between heavy smoking and binge drinking on heart attacks. Nearly 20% of smokers in the top 25% of binge drinkers report having a heart attack. Of the bottom 75% of binge drinkers, only 5-10% report having a heart attack.Although there does not seem to be a monotonic relationship between increase in days of binge drinking on heart attacks, we can see being in the top 75% of binge drinkers and being a smoker is associated with higher heart attack risk.
+ggplot(data=no_binge,aes(x=no_binge$drnk3ge5,fill=no_binge$cvdinfr4))+
+ geom_bar(position='fill')+
+  labs(x='# Days Binge Drinking Over 1 Month',y='Reported Heart Attacks Yes or No')
+
+
+
+
+```
+
